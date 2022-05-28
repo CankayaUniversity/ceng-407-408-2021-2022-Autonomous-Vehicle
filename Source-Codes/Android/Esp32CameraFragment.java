@@ -2,6 +2,7 @@ package com.p4f.esp32camai;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.app.NotificationManager;
 import android.content.DialogInterface;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
@@ -12,6 +13,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.InputType;
@@ -61,9 +63,10 @@ import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-
 public class Esp32CameraFragment extends Fragment {
 
     public enum STATE {
@@ -79,7 +82,10 @@ public class Esp32CameraFragment extends Fragment {
     }
 
     final String TAG = "ExCameraFragment";
-
+    MediaPlayer player;
+    int obj_cnt = 0;
+    public ArrayList list2 = new ArrayList();
+    public String[] stringArray2 = new String[obj_cnt];
     private UDPSocket mUdpClient;
     private String mServerAddressBroadCast = "255.255.255.255";
     InetAddress mServerAddr;
@@ -133,6 +139,10 @@ public class Esp32CameraFragment extends Fragment {
     private Drawing mDrawing = Drawing.CLEAR;
     private boolean mTargetLocked = false;
     private Bitmap mBitmapGrab = null;
+    private static final String CHANNEL_ID = "mobilhanem"; //Channel ID
+    private static final String CHANNEL_NAME = "Mobilhanem Dersleri"; //Channel Adı
+    private static final int NOTIFICATION_ID = 52; //Notification ID'si
+    private NotificationManager manager;
 
     private String mSelectedTracker = "None";
     private String mSelectedTrackerPre = "None";
@@ -142,6 +152,7 @@ public class Esp32CameraFragment extends Fragment {
     private org.opencv.core.Rect2d mInitRectangle = null;
     private int mBinaryThreshold = 80;
     private int mRadioIndex = 0;
+    public static String general_str ="";
     private Bitmap mBitmapLaneTracking = null;
     //    final String[] mRadioBtnNames = {
 //            "None",
@@ -164,13 +175,26 @@ public class Esp32CameraFragment extends Fragment {
         int testH = mTrackingOverlay.getHeight();
     }
 
+
+    private void stopPlayer() {
+        if (player != null) {
+            player.release();
+            player = null;
+            //Toast.makeText(this, "MediaPlayer released", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        stopPlayer();
+    }
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         mUdpClient = new UDPSocket(12345);
         mUdpClient.runUdpServer();
-
         try {
             mServerAddr = InetAddress.getByName(mServerAddressBroadCast);
         }catch (Exception e){
@@ -318,11 +342,11 @@ public class Esp32CameraFragment extends Fragment {
             detectorSSD =
                     TFLiteObjectDetectionSSDAPIModel.create(
                             getActivity().getAssets(),
-                            "ssdlite_mobilenet_v2_quantized.tflite",
+                            "ssd_mobilenet_v2_oid_v4.tflite",
                             "",
                             300,
                             Classifier.Device.CPU,
-                            MyConstants.MODEL_TYPE.UINT8,
+                            MyConstants.MODEL_TYPE.FLOAT32,
                             0.5f,
                             1,
                             CamResolution.getWidth(),
@@ -363,53 +387,96 @@ public class Esp32CameraFragment extends Fragment {
                             int imgHeight = mBitmapGrab.getHeight();
                             ((TFLiteObjectDetectionSSDAPIModel) detectorSSD).getResult(detectorSSDResult);
                             Paint paint = new Paint();
+                            Paint paintText2 = new Paint();
                             Paint paintText = new Paint();
-                            paint.setColor(Color.rgb(0, 255, 0));
+                            View v;
+                           // paint.setColor(Color.rgb(0, 255, 0));
                             Log.d(TAG, "Obj cnt: " + detectorSSDResult.size());
+                            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+                            LocalDateTime now = LocalDateTime.now();
                             for (TFLiteObjectDetectionSSDAPIModel.Recognition det : detectorSSDResult) {
                                 Log.d(TAG, "processing: " + det);
-                                paint.setStrokeWidth(10);
-                                paint.setStyle(Paint.Style.STROKE);
-                                float left = det.getLocation().left * mTrackingOverlay.getWidth();
-                                if (left < 0) {
-                                    left = 0;
-                                } else if (left > mTrackingOverlay.getWidth()) {
-                                    left = mTrackingOverlay.getWidth();
-                                }
+                                if(!((det.getTitle() == "Tortoise")||((det.getTitle() == "Magpie") || (det.getTitle() == "Container")|| (det.getTitle() == "Sea turtle")))) {
 
-                                float top = det.getLocation().top * mTrackingOverlay.getHeight();
-                                if (top < 0) {
-                                    top = 0;
-                                } else if (top > mTrackingOverlay.getHeight()) {
-                                    top = mTrackingOverlay.getHeight();
-                                }
+                                    if(det.getTitle() == "Handgun" || det.getTitle() == "Rifle" || det.getTitle() == "Tank" || det.getTitle() == "Skull" || det.getTitle() == "Land vehicle" || det.getTitle() == "Watercraft" || det.getTitle() == "Dagger" || det.getTitle() == "Knife" || det.getTitle() == "Missile" || det.getTitle() == "Rifle" || det.getTitle() == "Sword" || det.getTitle() == "Shotgun" || det.getTitle() == "Weapon" || det.getTitle() == "Rocket" || det.getTitle() == "Bomb" || det.getTitle() == "Remote control" ||  det.getTitle() == "Airplane" || det.getTitle() == "Helicopter" ) {
+                                      //  Paint paint = new Paint();
+                                        general_str=general_str.concat(det.getTitle()+" "+dtf.format(now)+"\n");
+                                        /*
+                                        paintText2.setColor(Color.BLUE);
+                                        paintText2.setStrokeWidth(2);
+                                        paintText2.setStyle(Paint.Style.FILL);
+                                        paintText2.setTextSize(mTrackingOverlay.getWidth()/10);
+                                        canvas.save();
+                                        canvas.rotate(90, mTrackingOverlay.getWidth()/6, mTrackingOverlay.getHeight()/8);
+                                        canvas.drawText(det.getTitle() + "is detected !", mTrackingOverlay.getWidth()/6, mTrackingOverlay.getHeight()/8, paintText2);
+*/
 
-                                float right = det.getLocation().right * mTrackingOverlay.getWidth();
-                                ;
-                                if (right < 0) {
-                                    right = 0;
-                                } else if (right > mTrackingOverlay.getWidth()) {
-                                    right = mTrackingOverlay.getWidth();
-                                }
+                                        paint.setColor(Color.rgb(255, 0, 0));
+                                        if (player == null) {
+                                            player = MediaPlayer.create(getContext(),R.raw.threat);
+                                            player.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                                                @Override
+                                                public void onCompletion(MediaPlayer mp) {
+                                                    stopPlayer();
+                                                }
+                                            });
+                                        }
+                                      //  Toast.makeText(getContext(), "Threat is detected", Toast.LENGTH_SHORT).show();
+                                        player.start();
+                                        /*
+                                        Toast toast = Toast.makeText(getActivity().getApplicationContext(), "Thread is detected", Toast.LENGTH_LONG);
+                                        toast.setGravity(Gravity.CENTER_HORIZONTAL|Gravity.CENTER_VERTICAL, 90, 90);
+                                        toast.show();
+                                        */
+                                    }
+                                    else
+                                    {
+                                      //  Paint paint = new Paint();
+                                        paint.setColor(Color.rgb(0, 255, 0));
+                                    }
+                                    paint.setStrokeWidth(10);
+                                    paint.setStyle(Paint.Style.STROKE);
+                                    float left = det.getLocation().left * mTrackingOverlay.getWidth();
+                                    if (left < 0) {
+                                        left = 0;
+                                    } else if (left > mTrackingOverlay.getWidth()) {
+                                        left = mTrackingOverlay.getWidth();
+                                    }
 
-                                float bottom = det.getLocation().bottom * mTrackingOverlay.getHeight();
-                                if (bottom < 0) {
-                                    bottom = 0;
-                                } else if (bottom > mTrackingOverlay.getHeight()) {
-                                    bottom = mTrackingOverlay.getHeight();
+                                    float top = det.getLocation().top * mTrackingOverlay.getHeight();
+                                    if (top < 0) {
+                                        top = 0;
+                                    } else if (top > mTrackingOverlay.getHeight()) {
+                                        top = mTrackingOverlay.getHeight();
+                                    }
+
+                                    float right = det.getLocation().right * mTrackingOverlay.getWidth();
+                                    ;
+                                    if (right < 0) {
+                                        right = 0;
+                                    } else if (right > mTrackingOverlay.getWidth()) {
+                                        right = mTrackingOverlay.getWidth();
+                                    }
+
+                                    float bottom = det.getLocation().bottom * mTrackingOverlay.getHeight();
+                                    if (bottom < 0) {
+                                        bottom = 0;
+                                    } else if (bottom > mTrackingOverlay.getHeight()) {
+                                        bottom = mTrackingOverlay.getHeight();
+                                    }
+                                    paintText.setColor(Color.BLUE);
+                                    paintText.setStrokeWidth(2);
+                                    paintText.setStyle(Paint.Style.FILL);
+                                    paintText.setTextSize(50);
+                                    canvas.drawRect(left, top, right, bottom, paint);
+                                    paint.setStyle(Paint.Style.FILL);
+                                    String txt = det.getTitle();// + "(" + String.format("%.2f", det.getConfidence()) + ")";
+                                    canvas.drawRect(left, top, left - 60, top + txt.length() * 30 + 50, paint);
+                                    canvas.save();
+                                    canvas.rotate(90, left - 50, top + 50);
+                                    canvas.drawText(txt, left - 50, top + 50, paintText);
+                                    canvas.restore();
                                 }
-                                paintText.setColor(Color.BLUE);
-                                paintText.setStrokeWidth(2);
-                                paintText.setStyle(Paint.Style.FILL);
-                                paintText.setTextSize(50);
-                                canvas.drawRect(left, top, right, bottom, paint);
-                                paint.setStyle(Paint.Style.FILL);
-                                String txt = det.getTitle();// + "(" + String.format("%.2f", det.getConfidence()) + ")";
-                                canvas.drawRect(left, top, left-60, top+txt.length()*30+50, paint);
-                                canvas.save();
-                                canvas.rotate(90, left-50, top + 50);
-                                canvas.drawText(txt, left - 50, top + 50, paintText);
-                                canvas.restore();
                             }
                         }
 
@@ -494,16 +561,17 @@ public class Esp32CameraFragment extends Fragment {
                                 paintText.setTextSize(mTrackingOverlay.getWidth()/20);
                                 canvas.save();
                                 canvas.rotate(90, mTrackingOverlay.getWidth()*5/6, mTrackingOverlay.getHeight()/8);
-                                canvas.drawText("Touch upper half screen to move camera up !", mTrackingOverlay.getWidth()*5/6, mTrackingOverlay.getHeight()/8, paintText);
+                               // canvas.drawText("Touch upper half screen to move camera up !", mTrackingOverlay.getWidth()*5/6, mTrackingOverlay.getHeight()/8, paintText);
                                 canvas.restore();
                                 canvas.save();
                                 canvas.rotate(90, mTrackingOverlay.getWidth()/6, mTrackingOverlay.getHeight()/8);
-                                canvas.drawText("Touch lower half screen to move camera down !", mTrackingOverlay.getWidth()/6, mTrackingOverlay.getHeight()/8, paintText);
+                                //canvas.drawText("Touch lower half screen to move camera down !", mTrackingOverlay.getWidth()/6, mTrackingOverlay.getHeight()/8, paintText);
                                 canvas.restore();
                             }
                         }
                     }
                 }
+
         );
 
         mTrackingOverlay.setOnTouchListener(new View.OnTouchListener() {
